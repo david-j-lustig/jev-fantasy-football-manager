@@ -56,7 +56,7 @@ def bye_teams_from_schedule(schedule: Iterable[dict[str, Any]], week: int) -> se
                 playing.add(team.upper())
         teams = game.get("teams")
         if isinstance(teams, list):
-            playing.update(str(t).upper() for t in teams)
+            playing.update(str(team).upper() for team in teams)
     if not playing:
         return set()
     return {team for team in NFL_TEAMS if team not in playing}

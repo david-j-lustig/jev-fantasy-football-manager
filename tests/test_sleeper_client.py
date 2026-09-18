@@ -4,7 +4,7 @@ from jev_ff.sleeper.cache import JsonFileCache
 from jev_ff.sleeper.client import SleeperClient
 
 
-def test_get_league_and_projections(tmp_path) -> None:
+def test_get_league_projections_and_cached_players(tmp_path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         if url.endswith("/state/nfl"):
@@ -48,13 +48,11 @@ def test_get_league_and_projections(tmp_path) -> None:
     )
     league = client.get_league("L1")
     assert league.scoring_settings["rec"] == 0.5
-    projs = client.get_projections("2025", 3)
-    assert projs["1"].opponent == "DAL"
-    assert projs["1"].stats["rec"] == 5
+    projections = client.get_projections("2025", 3)
+    assert projections["1"].opponent == "DAL"
+    assert projections["1"].stats["rec"] == 5
     players = client.get_players()
     assert players["1"].full_name == "Puka Nacua"
-    # Second call hits cache (handler would 404 if it went to /players again after we could detect it,
-    # but cache short-circuits).
-    again = client.get_players()
-    assert again["1"].player_id == "1"
+    cached = client.get_players()
+    assert cached["1"].player_id == "1"
     client.close()

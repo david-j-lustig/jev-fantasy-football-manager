@@ -132,11 +132,11 @@ class SleeperClient:
         )
         if not isinstance(payload, list):
             return []
-        out: list[TrendingPlayer] = []
+        trending: list[TrendingPlayer] = []
         for item in payload:
             if isinstance(item, dict) and item.get("player_id"):
-                out.append(TrendingPlayer.model_validate(item))
-        return out
+                trending.append(TrendingPlayer.model_validate(item))
+        return trending
 
     def get_projections(
         self,
@@ -145,11 +145,7 @@ class SleeperClient:
         *,
         season_type: str = "regular",
     ) -> dict[str, Projection]:
-        url = f"{self.unofficial_base}/projections/nfl/{season}"
-        if week is not None:
-            url += f"/{week}"
-        url += f"?season_type={season_type}"
-        payload = self._get(url)
+        payload = self._get(_stats_url(self.unofficial_base, "projections", season, week, season_type))
         return _projections_from_payload(payload, week=week, season=str(season))
 
     def get_stats(
@@ -159,11 +155,7 @@ class SleeperClient:
         *,
         season_type: str = "regular",
     ) -> dict[str, dict[str, Any]]:
-        url = f"{self.unofficial_base}/stats/nfl/{season}"
-        if week is not None:
-            url += f"/{week}"
-        url += f"?season_type={season_type}"
-        payload = self._get(url)
+        payload = self._get(_stats_url(self.unofficial_base, "stats", season, week, season_type))
         return _stats_from_payload(payload)
 
     def get_schedule(
@@ -179,6 +171,13 @@ class SleeperClient:
         except SleeperError:
             return []
         return payload if isinstance(payload, list) else []
+
+
+def _stats_url(base: str, kind: str, season: str | int, week: int | None, season_type: str) -> str:
+    url = f"{base}/{kind}/nfl/{season}"
+    if week is not None:
+        url += f"/{week}"
+    return f"{url}?season_type={season_type}"
 
 
 def _players_from_map(payload: dict[str, Any]) -> dict[str, Player]:
@@ -208,12 +207,12 @@ def _projections_from_payload(
         items = list(payload.values()) if payload and not _looks_like_projection(payload) else [payload]
     else:
         return {}
-    out: dict[str, Projection] = {}
+    projections: dict[str, Projection] = {}
     for item in items:
         parsed = _parse_projection(item, week=week, season=season)
         if parsed is not None:
-            out[parsed.player_id] = parsed
-    return out
+            projections[parsed.player_id] = parsed
+    return projections
 
 
 def _looks_like_projection(payload: dict[str, Any]) -> bool:
@@ -241,7 +240,7 @@ def _parse_projection(item: Any, *, week: int | None, season: str) -> Projection
         opponent = None
     return Projection(
         player_id=str(player_id),
-        stats={str(k): float(v) for k, v in stats.items() if isinstance(v, (int, float))},
+        stats={str(key): float(value) for key, value in stats.items() if isinstance(value, (int, float))},
         opponent=str(opponent) if opponent else None,
         week=item.get("week", week),
         season=str(item.get("season") or season),
@@ -260,10 +259,10 @@ def _stats_from_payload(payload: Any) -> dict[str, dict[str, Any]]:
             if isinstance(item, dict):
                 player_id = str(item.get("player_id") or key)
                 items.append((player_id, item))
-    out: dict[str, dict[str, Any]] = {}
+    stats_by_player: dict[str, dict[str, Any]] = {}
     for player_id, item in items:
         stats = item.get("stats") if isinstance(item.get("stats"), dict) else item
-        out[player_id] = dict(stats)
+        stats_by_player[player_id] = dict(stats)
         if item.get("opponent"):
-            out[player_id]["opponent"] = item["opponent"]
-    return out
+            stats_by_player[player_id]["opponent"] = item["opponent"]
+    return stats_by_player

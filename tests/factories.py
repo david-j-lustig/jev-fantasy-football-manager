@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from jev_ff.jev.client import JevResult
+from jev_ff.lineup.optimizer import PlayerValue
 from jev_ff.sleeper.models import League, Player, Roster, User
 
 
@@ -27,6 +28,20 @@ def make_player(
         search_full_name=name.replace(" ", "").lower(),
         search_first_name=first.lower(),
         search_last_name=last.lower(),
+    )
+
+
+def make_player_value(
+    player_id: str,
+    name: str,
+    position: str,
+    points: float,
+    **kwargs,
+) -> PlayerValue:
+    return PlayerValue(
+        player=make_player(player_id, name, position, **kwargs),
+        points=points,
+        eligible=True,
     )
 
 

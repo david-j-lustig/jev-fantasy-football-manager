@@ -10,6 +10,8 @@ from jev_ff.sleeper.schedule import is_on_bye, is_out
 from jev_ff.waivers.models import WaiverAdd, WaiverReport
 
 FAAB_LABELS = ["Ignore / $0", "Streaming / cheap", "Solid upgrade", "Must-add"]
+NON_FANTASY_POSITIONS = {"OL", "OT", "OG", "C", "LS", "P"}
+UNAVAILABLE_STATUSES = {"IR", "PUP", "Suspended"}
 
 
 def find_waivers(
@@ -29,58 +31,25 @@ def find_waivers(
     advisor: JevAdvisor | None = None,
     limit: int = 10,
 ) -> WaiverReport:
-    owned: set[str] = set()
-    for item in rosters:
-        owned.update(item.players)
-        if item.reserve:
-            owned.update(item.reserve)
-        if item.taxi:
-            owned.update(item.taxi)
-
+    owned_ids = _owned_player_ids(rosters)
     slots = starter_slots(roster_positions)
-    my_players = [players[pid] for pid in roster.players if pid in players]
+    my_players = [players[player_id] for player_id in roster.players if player_id in players]
     replacement = _replacement_levels(my_players, slots, week_points, ros_points, bye_teams)
-
     drop_candidates = _drop_candidates(my_players, week_points, ros_points, roster)
     primary_drop = drop_candidates[0][0] if drop_candidates else None
 
-    ranked: list[WaiverAdd] = []
-    for player_id, player in players.items():
-        if player_id in owned:
-            continue
-        if player.status and player.status not in {"Active", "Injured Reserve", None}:
-            if player.position not in {"DEF", "K"} and not player.team:
-                continue
-        if not player.positions or player.position in {"OL", "OT", "OG", "C", "LS", "P"}:
-            continue
-        if is_out(player) and player.injury_status in {"IR", "PUP", "Suspended"}:
-            continue
-        week_pts = 0.0 if is_on_bye(player, bye_teams, None) else week_points.get(player_id, 0.0)
-        ros_pts = ros_points.get(player_id, 0.0)
-        if week_pts <= 0 and ros_pts <= 0 and trending.get(player_id, 0) == 0:
-            continue
-        vor_week, vor_ros = _vor(player, slots, week_pts, ros_pts, replacement)
-        trend = trending.get(player_id, 0)
-        score = 0.6 * vor_week + 0.4 * vor_ros + min(trend, 200) / 200.0
-        ranked.append(
-            WaiverAdd(
-                player=player,
-                week_points=round(week_pts, 2),
-                ros_points=round(ros_pts, 2),
-                vor_week=round(vor_week, 2),
-                vor_ros=round(vor_ros, 2),
-                score=round(score, 4),
-                trending_adds=trend,
-                drop=primary_drop,
-                reason="VOR vs current starters",
-            )
-        )
-
-    ranked.sort(key=lambda item: item.score, reverse=True)
+    ranked = _rank_free_agents(
+        players=players,
+        owned_ids=owned_ids,
+        slots=slots,
+        week_points=week_points,
+        ros_points=ros_points,
+        trending=trending,
+        bye_teams=bye_teams,
+        replacement=replacement,
+        primary_drop=primary_drop,
+    )
     top = ranked[: max(limit, 1)]
-
-    jev_result: JevResult | None = None
-    jev_enabled = bool(advisor and advisor.enabled)
     notes: list[str] = []
     if advisor and advisor.enabled and top:
         jev_result = advisor.evaluate_waivers(
@@ -91,38 +60,107 @@ def find_waivers(
             headlines=headlines,
         )
         if jev_result:
-            for row in top:
-                worth = jev_result.nouls.get(f"worth_{row.player.player_id}")
-                faab = jev_result.scores.get(f"faab_{row.player.player_id}")
-                if worth:
-                    row.worth_it = worth.noul
-                    if worth.noul < 0.4:
-                        row.score -= 1.0
-                    elif worth.noul > 0.7:
-                        row.score += 0.5
-                if faab:
-                    row.faab_score = faab.score
-                    idx = min(3, max(0, int(round(faab.score))))
-                    row.faab_label = FAAB_LABELS[idx]
-                    row.reason = f"{row.reason}; FAAB: {row.faab_label}"
-            choice = jev_result.choices.get("best_drop")
-            if choice and choice.choice != "other" and choice.choice in players:
-                suggested = players[choice.choice]
-                notes.append(f"Jev preferred drop: {suggested.full_name}")
-                for row in top:
-                    row.drop = suggested
-            top.sort(key=lambda item: item.score, reverse=True)
+            _apply_jev_to_adds(top, jev_result, players, notes)
 
-    suggested_drop = top[0].drop if top else primary_drop
     return WaiverReport(
         week=week,
         season=season,
         roster_id=roster.roster_id,
         adds=top,
-        jev_enabled=jev_enabled,
+        jev_enabled=bool(advisor and advisor.enabled),
         notes=notes,
-        suggested_drop=suggested_drop,
+        suggested_drop=top[0].drop if top else primary_drop,
     )
+
+
+def _owned_player_ids(rosters: list[Roster]) -> set[str]:
+    owned: set[str] = set()
+    for roster in rosters:
+        owned.update(roster.players)
+        if roster.reserve:
+            owned.update(roster.reserve)
+        if roster.taxi:
+            owned.update(roster.taxi)
+    return owned
+
+
+def _is_waiver_candidate(player: Player) -> bool:
+    if player.status and player.status not in {"Active", "Injured Reserve", None}:
+        if player.position not in {"DEF", "K"} and not player.team:
+            return False
+    if not player.positions or player.position in NON_FANTASY_POSITIONS:
+        return False
+    if is_out(player) and player.injury_status in UNAVAILABLE_STATUSES:
+        return False
+    return True
+
+
+def _rank_free_agents(
+    *,
+    players: dict[str, Player],
+    owned_ids: set[str],
+    slots: list[str],
+    week_points: dict[str, float],
+    ros_points: dict[str, float],
+    trending: dict[str, int],
+    bye_teams: set[str],
+    replacement: dict[str, tuple[float, float]],
+    primary_drop: Player | None,
+) -> list[WaiverAdd]:
+    ranked: list[WaiverAdd] = []
+    for player_id, player in players.items():
+        if player_id in owned_ids or not _is_waiver_candidate(player):
+            continue
+        week_score = 0.0 if is_on_bye(player, bye_teams, None) else week_points.get(player_id, 0.0)
+        ros_score = ros_points.get(player_id, 0.0)
+        trend = trending.get(player_id, 0)
+        if week_score <= 0 and ros_score <= 0 and trend == 0:
+            continue
+        vor_week, vor_ros = _value_over_replacement(player, slots, week_score, ros_score, replacement)
+        ranked.append(
+            WaiverAdd(
+                player=player,
+                week_points=round(week_score, 2),
+                ros_points=round(ros_score, 2),
+                vor_week=round(vor_week, 2),
+                vor_ros=round(vor_ros, 2),
+                score=round(0.6 * vor_week + 0.4 * vor_ros + min(trend, 200) / 200.0, 4),
+                trending_adds=trend,
+                drop=primary_drop,
+                reason="VOR vs current starters",
+            )
+        )
+    ranked.sort(key=lambda add: add.score, reverse=True)
+    return ranked
+
+
+def _apply_jev_to_adds(
+    adds: list[WaiverAdd],
+    jev_result: JevResult,
+    players: dict[str, Player],
+    notes: list[str],
+) -> None:
+    for row in adds:
+        worth_it = jev_result.nouls.get(f"worth_{row.player.player_id}")
+        faab_answer = jev_result.scores.get(f"faab_{row.player.player_id}")
+        if worth_it:
+            row.worth_it = worth_it.noul
+            if worth_it.noul < 0.4:
+                row.score -= 1.0
+            elif worth_it.noul > 0.7:
+                row.score += 0.5
+        if faab_answer:
+            index = min(3, max(0, int(round(faab_answer.score))))
+            row.faab_score = faab_answer.score
+            row.faab_label = FAAB_LABELS[index]
+            row.reason = f"{row.reason}; FAAB: {row.faab_label}"
+    choice = jev_result.choices.get("best_drop")
+    if choice and choice.choice != "other" and choice.choice in players:
+        suggested = players[choice.choice]
+        notes.append(f"Jev preferred drop: {suggested.full_name}")
+        for row in adds:
+            row.drop = suggested
+    adds.sort(key=lambda add: add.score, reverse=True)
 
 
 def _replacement_levels(
@@ -132,21 +170,18 @@ def _replacement_levels(
     ros_points: dict[str, float],
     bye_teams: set[str],
 ) -> dict[str, tuple[float, float]]:
-    """Weakest relevant starter-level value at each slot type."""
     levels: dict[str, tuple[float, float]] = {}
-    unique_slots = list(dict.fromkeys(slots))
-    for slot in unique_slots:
+    for slot in dict.fromkeys(slots):
         eligible = [
-            p for p in my_players if player_can_fill(p, slot) and not is_on_bye(p, bye_teams, None) and not is_out(p)
+            player
+            for player in my_players
+            if player_can_fill(player, slot) and not is_on_bye(player, bye_teams, None) and not is_out(player)
         ]
         if not eligible:
             levels[slot] = (0.0, 0.0)
             continue
-        eligible.sort(key=lambda p: week_points.get(p.player_id, 0.0), reverse=True)
-        count = slots.count(slot)
-        # Replacement is the last starter at this slot, or 0 if we can't fill it.
-        starter_pool = eligible[: max(count, 1)]
-        worst = starter_pool[-1]
+        eligible.sort(key=lambda player: week_points.get(player.player_id, 0.0), reverse=True)
+        worst = eligible[: max(slots.count(slot), 1)][-1]
         levels[slot] = (
             week_points.get(worst.player_id, 0.0),
             ros_points.get(worst.player_id, 0.0),
@@ -154,11 +189,11 @@ def _replacement_levels(
     return levels
 
 
-def _vor(
+def _value_over_replacement(
     player: Player,
     slots: list[str],
-    week_pts: float,
-    ros_pts: float,
+    week_points: float,
+    ros_points: float,
     replacement: dict[str, tuple[float, float]],
 ) -> tuple[float, float]:
     best_week = -999.0
@@ -168,11 +203,11 @@ def _vor(
         if not player_can_fill(player, slot):
             continue
         matched = True
-        week_rep, ros_rep = replacement.get(slot, (0.0, 0.0))
-        best_week = max(best_week, week_pts - week_rep)
-        best_ros = max(best_ros, ros_pts - ros_rep)
+        week_replacement, ros_replacement = replacement.get(slot, (0.0, 0.0))
+        best_week = max(best_week, week_points - week_replacement)
+        best_ros = max(best_ros, ros_points - ros_replacement)
     if not matched:
-        return week_pts, ros_pts
+        return week_points, ros_points
     return best_week, best_ros
 
 
@@ -183,8 +218,11 @@ def _drop_candidates(
     roster: Roster,
 ) -> list[tuple[Player, float]]:
     starters = set(roster.starters)
-    bench = [p for p in my_players if p.player_id not in starters]
-    if not bench:
-        bench = list(my_players)
-    bench.sort(key=lambda p: (ros_points.get(p.player_id, 0.0), week_points.get(p.player_id, 0.0)))
-    return [(p, ros_points.get(p.player_id, 0.0)) for p in bench[:8]]
+    bench = [player for player in my_players if player.player_id not in starters] or list(my_players)
+    bench.sort(
+        key=lambda player: (
+            ros_points.get(player.player_id, 0.0),
+            week_points.get(player.player_id, 0.0),
+        )
+    )
+    return [(player, ros_points.get(player.player_id, 0.0)) for player in bench[:8]]

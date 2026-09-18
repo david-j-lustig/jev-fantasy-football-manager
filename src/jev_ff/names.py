@@ -80,7 +80,7 @@ def resolve_player(query: str, players: Mapping[str, Player]) -> Player:
         if len(unique) == 1:
             return unique[0]
         if len(unique) > 1:
-            names = ", ".join(sorted(p.full_name for p in unique[:8]))
+            names = ", ".join(sorted(player.full_name for player in unique[:8]))
             raise PlayerLookupError(f"Ambiguous player '{query}': {names}")
 
     raise PlayerLookupError(f"Unknown player: {query}")

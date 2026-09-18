@@ -36,11 +36,11 @@ class InjuryNewsProvider:
     """Default news: Sleeper injury fields only."""
 
     def headlines(self, player: Player, *, week: int) -> list[str]:
-        bits: list[str] = []
+        notes: list[str] = []
         if player.injury_status:
-            bits.append(f"Injury status: {player.injury_status}")
+            notes.append(f"Injury status: {player.injury_status}")
         if player.practice_participation:
-            bits.append(f"Practice: {player.practice_participation}")
+            notes.append(f"Practice: {player.practice_participation}")
         if player.injury_notes:
-            bits.append(player.injury_notes)
-        return bits
+            notes.append(player.injury_notes)
+        return notes

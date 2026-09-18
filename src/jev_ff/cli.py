@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 import typer
 from rich.console import Console
@@ -15,9 +17,10 @@ from jev_ff.models import LineupReport, TradeReport, WaiverReport
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="Sleeper recommendations powered by Jev.")
 console = Console()
+T = TypeVar("T")
 
 
-def _manager(
+def _build_manager(
     league_id: str | None,
     roster_id: int | None,
     username: str | None,
@@ -31,13 +34,21 @@ def _manager(
         model=model,
         config_path=config,
     )
-    mgr = FantasyManager.from_settings(settings)
-    if not mgr.jev_enabled:
+    manager = FantasyManager.from_settings(settings)
+    if not manager.jev_enabled:
         console.print(
             "[yellow]Jev disabled[/yellow] — set TYPESAFE_API_KEY for news/injury overlays. "
             "Projection-only recommendations still run."
         )
-    return mgr
+    return manager
+
+
+def _run(action: Callable[[], T]) -> T:
+    try:
+        return action()
+    except JevFFError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
 
 
 @app.callback()
@@ -55,12 +66,8 @@ def lineup(
     model: str | None = typer.Option(None, "--model", help="TypeSafe model id (default jev-latest)"),
 ) -> None:
     """Recommend a starting lineup for the week."""
-    try:
-        mgr = _manager(league_id, roster_id, username, config, model)
-        report = mgr.recommend_lineup(week)
-    except JevFFError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(1) from exc
+    manager = _run(lambda: _build_manager(league_id, roster_id, username, config, model))
+    report = _run(lambda: manager.recommend_lineup(week))
     _print_lineup(report)
 
 
@@ -75,12 +82,8 @@ def waivers(
     model: str | None = typer.Option(None, "--model"),
 ) -> None:
     """Rank waiver-wire adds for your roster."""
-    try:
-        mgr = _manager(league_id, roster_id, username, config, model)
-        report = mgr.find_waivers(week, limit=limit)
-    except JevFFError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(1) from exc
+    manager = _run(lambda: _build_manager(league_id, roster_id, username, config, model))
+    report = _run(lambda: manager.find_waivers(week, limit=limit))
     _print_waivers(report)
 
 
@@ -97,20 +100,16 @@ def trade(
     model: str | None = typer.Option(None, "--model"),
 ) -> None:
     """Evaluate a proposed give/get trade."""
-    try:
-        mgr = _manager(league_id, roster_id, username, config, model)
-        report = mgr.evaluate_trade(give, get, week=week, opponent_roster_id=opponent_roster_id)
-    except JevFFError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(1) from exc
+    manager = _run(lambda: _build_manager(league_id, roster_id, username, config, model))
+    report = _run(lambda: manager.evaluate_trade(give, get, week=week, opponent_roster_id=opponent_roster_id))
     _print_trade(report)
 
 
 def _print_lineup(report: LineupReport) -> None:
+    jev_tag = "  [cyan]Jev on[/cyan]" if report.jev_enabled else ""
     console.print(
         f"[bold]Week {report.week} lineup[/bold]  projected {report.projected_total:.1f}  "
-        f"current {report.current_total:.1f}  delta {report.delta:+.1f}"
-        + ("  [cyan]Jev on[/cyan]" if report.jev_enabled else "")
+        f"current {report.current_total:.1f}  delta {report.delta:+.1f}{jev_tag}"
     )
     table = Table(show_header=True, header_style="bold")
     table.add_column("Slot", style="cyan", width=12)
@@ -119,10 +118,10 @@ def _print_lineup(report: LineupReport) -> None:
     table.add_column("Note")
     for row in report.starters:
         name = "—" if row.player is None else row.player.full_name
-        flag = row.reason
+        note = row.reason
         if row.needs_review:
-            flag = (flag + " · review").strip(" ·")
-        table.add_row(row.slot, name, f"{row.projected_points:.1f}", flag)
+            note = (note + " · review").strip(" ·")
+        table.add_row(row.slot, name, f"{row.projected_points:.1f}", note)
     console.print(table)
     if report.bench:
         bench = Table(title="Bench", show_header=True)
@@ -148,9 +147,9 @@ def _print_waivers(report: WaiverReport) -> None:
     table.add_column("VOR", justify="right")
     table.add_column("Trend", justify="right")
     table.add_column("FAAB")
-    for i, row in enumerate(report.adds, start=1):
+    for index, row in enumerate(report.adds, start=1):
         table.add_row(
-            str(i),
+            str(index),
             row.player.full_name,
             "/".join(row.player.positions),
             f"{row.week_points:.1f}",
@@ -164,8 +163,8 @@ def _print_waivers(report: WaiverReport) -> None:
 
 
 def _print_trade(report: TradeReport) -> None:
-    give_names = ", ".join(p.full_name for p in report.give.players) or "—"
-    get_names = ", ".join(p.full_name for p in report.get.players) or "—"
+    give_names = ", ".join(player.full_name for player in report.give.players) or "—"
+    get_names = ", ".join(player.full_name for player in report.get.players) or "—"
     console.print(f"[bold]Trade[/bold]  give {give_names}  →  get {get_names}")
     console.print(f"ROS delta {report.ros_delta:+.1f}   week delta {report.week_delta:+.1f}   {report.fairness_label}")
     console.print(report.recommendation)

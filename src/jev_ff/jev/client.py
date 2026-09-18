@@ -44,14 +44,14 @@ class NullJevEvaluator:
     def system_one(self, state: Any, questions: dict[str, Any]) -> JevResult:
         result = JevResult(model="null")
         for key, question in questions.items():
-            qtype = question.get("type")
-            if qtype == "noul":
+            question_type = question.get("type")
+            if question_type == "noul":
                 result.nouls[key] = NoulAnswer(noul=0.0, confidence=0.0)
-            elif qtype == "choice":
+            elif question_type == "choice":
                 criteria = question.get("criteria") or {}
                 first = next(iter(criteria), "other")
                 result.choices[key] = ChoiceAnswer(choice=str(first), probabilities={}, confidence=0.0)
-            elif qtype == "score":
+            elif question_type == "score":
                 result.scores[key] = ScoreAnswer(score=0.0, confidence=0.0)
         return result
 
@@ -62,76 +62,86 @@ class TypeSafeJevEvaluator:
         self.model = model
 
     def system_one(self, state: Any, questions: dict[str, Any]) -> JevResult:
-        from typesafe_sdk import Choice, Noul, Score, TypeSafeClient
-
-        sdk_questions: dict[str, Any] = {}
-        for key, question in questions.items():
-            qtype = question["type"]
-            if qtype == "noul":
-                sdk_questions[key] = Noul(
-                    instructions=question["instructions"],
-                    criteria=question.get("criteria"),
-                )
-            elif qtype == "choice":
-                sdk_questions[key] = Choice(
-                    instructions=question["instructions"],
-                    criteria=question["criteria"],
-                )
-            elif qtype == "score":
-                sdk_questions[key] = Score(
-                    instructions=question["instructions"],
-                    criteria=question["criteria"],
-                )
-            else:
-                raise ValueError(f"Unknown question type: {qtype}")
+        from typesafe_sdk import TypeSafeClient
 
         kwargs: dict[str, Any] = {"model": self.model}
         if self.api_key:
             kwargs["api_key"] = self.api_key
         with TypeSafeClient(**kwargs) as client:
-            response = client.system_one(state=state, questions=sdk_questions)
-        return _from_sdk(response)
+            response = client.system_one(state=state, questions=_to_sdk_questions(questions))
+        return result_from_sdk(response)
 
 
-def _from_sdk(response: Any) -> JevResult:
+def _to_sdk_questions(questions: dict[str, Any]) -> dict[str, Any]:
+    from typesafe_sdk import Choice, Noul, Score
+
+    sdk_questions: dict[str, Any] = {}
+    for key, question in questions.items():
+        question_type = question["type"]
+        if question_type == "noul":
+            sdk_questions[key] = Noul(
+                instructions=question["instructions"],
+                criteria=question.get("criteria"),
+            )
+        elif question_type == "choice":
+            sdk_questions[key] = Choice(
+                instructions=question["instructions"],
+                criteria=question["criteria"],
+            )
+        elif question_type == "score":
+            sdk_questions[key] = Score(
+                instructions=question["instructions"],
+                criteria=question["criteria"],
+            )
+        else:
+            raise ValueError(f"Unknown question type: {question_type}")
+    return sdk_questions
+
+
+def result_from_sdk(response: Any) -> JevResult:
     result = JevResult(model=getattr(response, "model", None))
-    nouls = getattr(response, "nouls", None) or {}
-    choices = getattr(response, "choices", None) or {}
-    scores = getattr(response, "scores", None) or {}
+    _copy_noul_map(result, getattr(response, "nouls", None) or {})
+    _copy_choice_map(result, getattr(response, "choices", None) or {})
+    _copy_score_map(result, getattr(response, "scores", None) or {})
+    answers = getattr(response, "answers", None) or {}
+    if answers and not (result.nouls or result.choices or result.scores):
+        _copy_combined_answers(result, answers)
+    return result
+
+
+def _copy_noul_map(result: JevResult, nouls: dict) -> None:
     for key, answer in nouls.items():
         result.nouls[key] = NoulAnswer(
             noul=float(answer.noul),
             confidence=getattr(answer, "confidence", None),
         )
+
+
+def _copy_choice_map(result: JevResult, choices: dict) -> None:
     for key, answer in choices.items():
         result.choices[key] = ChoiceAnswer(
             choice=str(answer.choice),
             probabilities=dict(getattr(answer, "probabilities", None) or {}),
             confidence=float(getattr(answer, "confidence", 1.0) or 1.0),
         )
+
+
+def _copy_score_map(result: JevResult, scores: dict) -> None:
     for key, answer in scores.items():
         legend = getattr(answer, "legend", None) or {}
         result.scores[key] = ScoreAnswer(
             score=float(answer.score),
             confidence=float(getattr(answer, "confidence", 1.0) or 1.0),
-            legend={str(k): str(v) for k, v in dict(legend).items()},
+            legend={str(level): str(label) for level, label in dict(legend).items()},
         )
-    # Some SDK versions expose a combined `.answers` map instead.
-    answers = getattr(response, "answers", None) or {}
-    if answers and not (result.nouls or result.choices or result.scores):
-        for key, answer in answers.items():
-            atype = getattr(answer, "type", None)
-            if atype == "noul":
-                result.nouls[key] = NoulAnswer(noul=float(answer.noul), confidence=getattr(answer, "confidence", None))
-            elif atype == "choice":
-                result.choices[key] = ChoiceAnswer(
-                    choice=str(answer.choice),
-                    probabilities=dict(getattr(answer, "probabilities", None) or {}),
-                    confidence=float(getattr(answer, "confidence", 1.0) or 1.0),
-                )
-            elif atype == "score":
-                result.scores[key] = ScoreAnswer(
-                    score=float(answer.score),
-                    confidence=float(getattr(answer, "confidence", 1.0) or 1.0),
-                )
-    return result
+
+
+def _copy_combined_answers(result: JevResult, answers: dict) -> None:
+    for key, answer in answers.items():
+        answer_type = getattr(answer, "type", None)
+        if answer_type == "noul":
+            _copy_noul_map(result, {key: answer})
+        elif answer_type == "choice":
+            _copy_choice_map(result, {key: answer})
+        elif answer_type == "score":
+            _copy_score_map(result, {key: answer})

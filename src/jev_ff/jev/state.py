@@ -32,14 +32,14 @@ def player_card(
 
 
 def card_from_value(
-    pv: PlayerValue,
+    player_value: PlayerValue,
     *,
     opponent: str | None = None,
     headlines: list[str] | None = None,
 ) -> dict[str, Any]:
     return player_card(
-        pv.player,
-        projected_points=pv.points,
+        player_value.player,
+        projected_points=player_value.points,
         opponent=opponent,
         headlines=headlines,
     )
@@ -61,16 +61,16 @@ def lineup_state(
 
 
 def scoring_summary(scoring_settings: dict[str, float]) -> str:
-    rec = float(scoring_settings.get("rec") or 0)
-    pass_td = float(scoring_settings.get("pass_td") or 0)
-    te_bonus = float(scoring_settings.get("bonus_rec_te") or 0)
-    if rec >= 0.9:
-        ppr = "PPR"
-    elif rec >= 0.4:
-        ppr = "half-PPR"
+    reception_points = float(scoring_settings.get("rec") or 0)
+    passing_td_points = float(scoring_settings.get("pass_td") or 0)
+    te_premium = float(scoring_settings.get("bonus_rec_te") or 0)
+    if reception_points >= 0.9:
+        scoring_label = "PPR"
+    elif reception_points >= 0.4:
+        scoring_label = "half-PPR"
     else:
-        ppr = "standard"
-    bits = [ppr, f"{pass_td:g}-pt passing TDs"]
-    if te_bonus:
-        bits.append(f"TE premium +{te_bonus:g}/rec")
-    return ", ".join(bits)
+        scoring_label = "standard"
+    parts = [scoring_label, f"{passing_td_points:g}-pt passing TDs"]
+    if te_premium:
+        parts.append(f"TE premium +{te_premium:g}/rec")
+    return ", ".join(parts)

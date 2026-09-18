@@ -82,14 +82,6 @@ Sleeper league + projections  →  scoring engine  →  lineup / VOR / ROS math
 
 Jev is a System One model: you send compact JSON **state** and typed **questions** (`Noul`, `Choice`, `Score`) and get calibrated probabilities back. This library keeps control flow in Python and only asks Jev for judgments.
 
-## Optional extras
-
-```bash
-pip install jev-fantasy-football-manager[ilp]
-```
-
-Installs PuLP for an ILP lineup solver. A backtracking solver is the default and is enough for typical roster sizes.
-
 ## Disclaimer
 
 Not affiliated with Sleeper or TypeSafe. Recommendations can be wrong; you still set the lineup in the Sleeper app. Sleeper's API is free for non-commercial use — see [their docs](https://docs.sleeper.com/).

@@ -53,15 +53,8 @@ class CloseCall:
 
 
 def optimize_lineup(slots: list[str], candidates: list[PlayerValue]) -> LineupSolution:
-    """Assign players to starter slots, maximizing projected points.
-
-    Tries optional PuLP ILP when installed (``pip install jev-fantasy-football-manager[ilp]``),
-    otherwise a backtracking search on the top candidates per slot.
-    """
-    pulp_solution = _optimize_with_pulp(slots, candidates)
-    if pulp_solution is not None:
-        return pulp_solution
-    return _optimize_with_backtracking(slots, candidates)
+    """Assign players to starter slots, maximizing projected points."""
+    return _search_assignments(slots, candidates)
 
 
 def build_player_values(
@@ -220,7 +213,7 @@ def _unused_players(candidates: list[PlayerValue], started_ids: set[str]) -> lis
     return bench
 
 
-def _optimize_with_backtracking(slots: list[str], candidates: list[PlayerValue]) -> LineupSolution:
+def _search_assignments(slots: list[str], candidates: list[PlayerValue]) -> LineupSolution:
     ordered_slots = sorted(enumerate(slots), key=slot_sort_key)
     eligible = [candidate for candidate in candidates if candidate.eligible]
     best_choice: list[tuple[int, PlayerValue | None]] | None = None
@@ -261,79 +254,3 @@ def _optimize_with_backtracking(slots: list[str], candidates: list[PlayerValue])
             notes=["No eligible players."],
         )
     return _solution_from_choices(slots, candidates, best_choice)
-
-
-def _optimize_with_pulp(slots: list[str], candidates: list[PlayerValue]) -> LineupSolution | None:
-    try:
-        import pulp
-    except ImportError:
-        return None
-    eligible = [candidate for candidate in candidates if candidate.eligible]
-    if not eligible:
-        return None
-    eligible_by_id = {candidate.player_id: candidate for candidate in eligible}
-    problem = pulp.LpProblem("lineup", pulp.LpMaximize)
-    variables = _pulp_variables(pulp, slots, eligible)
-    if not variables:
-        return None
-    problem += pulp.lpSum(
-        variables[slot_index, player_id] * eligible_by_id[player_id].points for slot_index, player_id in variables
-    )
-    _add_pulp_constraints(pulp, problem, slots, eligible_by_id, variables)
-    try:
-        status = problem.solve(pulp.PULP_CBC_CMD(msg=False))
-    except Exception:
-        return None
-    if pulp.LpStatus[status] != "Optimal":
-        return None
-    chosen = _chosen_from_pulp(pulp, slots, eligible_by_id, variables)
-    return _solution_from_choices(slots, candidates, chosen)
-
-
-def _pulp_variables(pulp: object, slots: list[str], eligible: list[PlayerValue]) -> dict[tuple[int, str], object]:
-    variables: dict[tuple[int, str], object] = {}
-    for slot_index, slot in enumerate(slots):
-        for candidate in eligible:
-            if player_can_fill(candidate.player, slot):
-                variables[slot_index, candidate.player_id] = pulp.LpVariable(
-                    f"s{slot_index}_{candidate.player_id}",
-                    lowBound=0,
-                    upBound=1,
-                    cat="Binary",
-                )
-    return variables
-
-
-def _add_pulp_constraints(
-    pulp: object,
-    problem: object,
-    slots: list[str],
-    eligible_by_id: dict[str, PlayerValue],
-    variables: dict[tuple[int, str], object],
-) -> None:
-    for slot_index, _slot in enumerate(slots):
-        slot_vars = [variables[key] for key in variables if key[0] == slot_index]
-        if slot_vars:
-            problem += pulp.lpSum(slot_vars) <= 1, f"slot_{slot_index}"
-    for player_id in eligible_by_id:
-        player_vars = [variables[key] for key in variables if key[1] == player_id]
-        if player_vars:
-            problem += pulp.lpSum(player_vars) <= 1, f"player_{player_id}"
-
-
-def _chosen_from_pulp(
-    pulp: object,
-    slots: list[str],
-    eligible_by_id: dict[str, PlayerValue],
-    variables: dict[tuple[int, str], object],
-) -> list[tuple[int, PlayerValue | None]]:
-    chosen: list[tuple[int, PlayerValue | None]] = []
-    for slot_index, _slot in enumerate(slots):
-        pick: PlayerValue | None = None
-        for player_id, candidate in eligible_by_id.items():
-            variable = variables.get((slot_index, player_id))
-            if variable is not None and pulp.value(variable) and pulp.value(variable) > 0.5:
-                pick = candidate
-                break
-        chosen.append((slot_index, pick))
-    return chosen

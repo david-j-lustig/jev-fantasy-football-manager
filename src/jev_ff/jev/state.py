@@ -1,4 +1,4 @@
-"""Compact JSON state for Jev. Send only what the questions need."""
+"""JSON state sent to Jev with each question."""
 
 from __future__ import annotations
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from jev_ff.errors import JevError
+
 
 @dataclass
 class NoulAnswer:
@@ -62,13 +64,19 @@ class TypeSafeJevEvaluator:
         self.model = model
 
     def system_one(self, state: Any, questions: dict[str, Any]) -> JevResult:
-        from typesafe_sdk import TypeSafeClient
+        try:
+            from typesafe_sdk import TypeSafeClient, TypeSafeError
+        except ImportError as exc:
+            raise JevError("typesafe-sdk is not installed.") from exc
 
         kwargs: dict[str, Any] = {"model": self.model}
         if self.api_key:
             kwargs["api_key"] = self.api_key
-        with TypeSafeClient(**kwargs) as client:
-            response = client.system_one(state=state, questions=_to_sdk_questions(questions))
+        try:
+            with TypeSafeClient(**kwargs) as client:
+                response = client.system_one(state=state, questions=_to_sdk_questions(questions))
+        except TypeSafeError as exc:
+            raise JevError(f"TypeSafe request failed: {exc}") from exc
         return result_from_sdk(response)
 
 
@@ -122,7 +130,7 @@ def _copy_choice_map(result: JevResult, choices: dict) -> None:
         result.choices[key] = ChoiceAnswer(
             choice=str(answer.choice),
             probabilities=dict(getattr(answer, "probabilities", None) or {}),
-            confidence=float(getattr(answer, "confidence", 1.0) or 1.0),
+            confidence=_confidence(answer, default=1.0),
         )
 
 
@@ -131,7 +139,7 @@ def _copy_score_map(result: JevResult, scores: dict) -> None:
         legend = getattr(answer, "legend", None) or {}
         result.scores[key] = ScoreAnswer(
             score=float(answer.score),
-            confidence=float(getattr(answer, "confidence", 1.0) or 1.0),
+            confidence=_confidence(answer, default=1.0),
             legend={str(level): str(label) for level, label in dict(legend).items()},
         )
 
@@ -145,3 +153,10 @@ def _copy_combined_answers(result: JevResult, answers: dict) -> None:
             _copy_choice_map(result, {key: answer})
         elif answer_type == "score":
             _copy_score_map(result, {key: answer})
+
+
+def _confidence(answer: Any, *, default: float) -> float:
+    raw = getattr(answer, "confidence", None)
+    if raw is None:
+        return default
+    return float(raw)

@@ -73,9 +73,9 @@ def load_settings(
     env_roster = os.environ.get("JEV_FF_ROSTER_ID") or os.environ.get("SLEEPER_ROSTER_ID")
     resolved_roster = roster_id
     if resolved_roster is None and env_roster:
-        resolved_roster = int(env_roster)
+        resolved_roster = _as_int(env_roster, source="JEV_FF_ROSTER_ID")
     if resolved_roster is None and file_data.get("roster_id") is not None:
-        resolved_roster = int(file_data["roster_id"])
+        resolved_roster = _as_int(file_data["roster_id"], source="roster_id")
 
     resolved_username = (
         username
@@ -83,12 +83,11 @@ def load_settings(
         or os.environ.get("JEV_FF_USERNAME")
         or _as_str(file_data.get("username"))
     )
-    resolved_key = (
-        typesafe_api_key
-        or os.environ.get("TYPESAFE_API_KEY")
-        or os.environ.get("JEV_API_KEY")
-        or _as_str(file_data.get("typesafe_api_key"))
-    )
+    if file_data.get("typesafe_api_key") is not None:
+        raise ConfigError(
+            "typesafe_api_key is not allowed in jev-ff.toml. Set TYPESAFE_API_KEY in the environment instead."
+        )
+    resolved_key = typesafe_api_key or os.environ.get("TYPESAFE_API_KEY") or os.environ.get("JEV_API_KEY")
     resolved_model = model or os.environ.get("JEV_FF_MODEL") or _as_str(file_data.get("model")) or "jev-latest"
     return Settings(
         league_id=resolved_league,
@@ -105,3 +104,10 @@ def _as_str(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _as_int(value: Any, *, source: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"Invalid {source}: {value!r}. Expected an integer roster id.") from exc

@@ -1,4 +1,4 @@
-"""Atomic lineup questions for TypeSafe Jev."""
+"""Lineup questions for TypeSafe Jev."""
 
 from __future__ import annotations
 

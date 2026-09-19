@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a recommendation, provider, or CLI flag
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you want to do that you can’t today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: API or CLI shape, if you have one.
+    validations:
+      required: true
+  - type: dropdown
+    id: recommend-only
+    attributes:
+      label: Would this stay recommend-only?
+      description: This project does not write to Sleeper (no set-lineup, claims, or trades).
+      options:
+        - "Yes, recommendations only"
+        - "No / not sure"
+    validations:
+      required: true

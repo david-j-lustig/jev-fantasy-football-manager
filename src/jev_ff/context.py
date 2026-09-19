@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from jev_ff.errors import ConfigError, SleeperError
 from jev_ff.sleeper.models import League, Player, Projection, Roster, User
 from jev_ff.sleeper.scoring import league_points
 
@@ -47,7 +48,7 @@ class LeagueContext:
         for item in self.rosters:
             if item.roster_id == roster_id:
                 return item
-        raise KeyError(f"Roster {roster_id} not in league {self.league.league_id}")
+        raise ConfigError(f"Roster {roster_id} not in league {self.league.league_id}.")
 
     def user_for_roster(self, roster: Roster) -> User | None:
         for user in self.users:
@@ -56,4 +57,12 @@ class LeagueContext:
         return None
 
     def roster_players(self, roster: Roster) -> list[Player]:
-        return [self.players[player_id] for player_id in roster.players if player_id in self.players]
+        missing = [player_id for player_id in roster.players if player_id not in self.players]
+        if missing:
+            shown = ", ".join(missing[:8])
+            extra = "" if len(missing) <= 8 else f" (+{len(missing) - 8} more)"
+            raise SleeperError(
+                f"{len(missing)} rostered player(s) missing from the Sleeper player map: {shown}{extra}. "
+                "The player cache may be stale; delete ~/.cache/jev_ff/players_nfl.json and retry."
+            )
+        return [self.players[player_id] for player_id in roster.players]

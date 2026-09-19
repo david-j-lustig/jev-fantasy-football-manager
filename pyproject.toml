@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jev-fantasy-football-manager"
 version = "0.1.0"
-description = "Recommend Sleeper fantasy football lineups, waivers, and trades. Code calculates; TypeSafe Jev judges."
+description = "Recommend Sleeper fantasy football lineups, waivers, and trades."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
     "Topic :: Games/Entertainment",
 ]
 dependencies = [
@@ -41,6 +42,7 @@ dev = [
 Homepage = "https://github.com/david-j-lustig/jev-fantasy-football-manager"
 Repository = "https://github.com/david-j-lustig/jev-fantasy-football-manager"
 Issues = "https://github.com/david-j-lustig/jev-fantasy-football-manager/issues"
+Changelog = "https://github.com/david-j-lustig/jev-fantasy-football-manager/blob/main/CHANGELOG.md"
 
 [project.scripts]
 jev-ff = "jev_ff.cli:app"

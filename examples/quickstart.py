@@ -11,16 +11,16 @@ from jev_ff import FantasyManager
 
 
 def main() -> None:
-    manager = FantasyManager.from_env()
-    report = manager.recommend_lineup()
-    print(f"Week {report.week} projected {report.projected_total:.1f} (current {report.current_total:.1f})")
-    for row in report.starters:
-        name = "—" if row.player is None else row.player.full_name
-        print(f"  {row.slot:12} {name:25} {row.projected_points:5.1f}  {row.reason}")
-    if report.notes:
-        print("Notes:")
-        for note in report.notes:
-            print(f"  - {note}")
+    with FantasyManager.from_env() as manager:
+        report = manager.recommend_lineup()
+        print(f"Week {report.week} projected {report.projected_total:.1f} (current {report.current_total:.1f})")
+        for row in report.starters:
+            name = "—" if row.player is None else row.player.full_name
+            print(f"  {row.slot:12} {name:25} {row.projected_points:5.1f}  {row.reason}")
+        if report.notes:
+            print("Notes:")
+            for note in report.notes:
+                print(f"  - {note}")
 
 
 if __name__ == "__main__":

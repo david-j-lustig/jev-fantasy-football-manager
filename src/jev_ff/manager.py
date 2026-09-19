@@ -1,4 +1,4 @@
-"""Public facade: load a Sleeper league and recommend lineup / waivers / trades."""
+"""Load a Sleeper league and recommend lineups, waivers, and trades."""
 
 from __future__ import annotations
 
@@ -53,6 +53,7 @@ class FantasyManager:
         self.league_id = league_id
         self._roster_id = roster_id
         self.username = username
+        self._owns_sleeper = sleeper is None
         self.sleeper = sleeper or SleeperClient(cache=cache)
         self.projections = projections or SleeperProjectionsProvider(self.sleeper)
         self.news = news or InjuryNewsProvider()
@@ -60,6 +61,16 @@ class FantasyManager:
         self.advisor = JevAdvisor(self.jev, enabled=not isinstance(self.jev, NullJevEvaluator))
         self.model = model
         self._resolved_roster_id: int | None = None
+
+    def close(self) -> None:
+        if self._owns_sleeper:
+            self.sleeper.close()
+
+    def __enter__(self) -> FantasyManager:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     @classmethod
     def from_env(

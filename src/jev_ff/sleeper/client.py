@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from jev_ff._version import __version__
 from jev_ff.errors import SleeperError
@@ -112,12 +113,16 @@ class SleeperClient:
         if not refresh:
             cached = self.cache.get(PLAYERS_CACHE_NAME)
             if isinstance(cached, dict):
-                return _players_from_map(cached)
+                try:
+                    return _players_from_map(cached)
+                except SleeperError:
+                    pass
         payload = self._get(f"{self.official_base}/players/{sport}")
         if not isinstance(payload, dict):
             raise SleeperError("Unexpected players payload")
+        players = _players_from_map(payload)
         self.cache.set(PLAYERS_CACHE_NAME, payload)
-        return _players_from_map(payload)
+        return players
 
     def get_trending(
         self,
@@ -182,15 +187,21 @@ def _stats_url(base: str, kind: str, season: str | int, week: int | None, season
 
 def _players_from_map(payload: dict[str, Any]) -> dict[str, Player]:
     players: dict[str, Player] = {}
+    skipped = 0
     for player_id, raw in payload.items():
         if not isinstance(raw, dict):
+            skipped += 1
             continue
         data = dict(raw)
         data.setdefault("player_id", str(player_id))
         try:
             players[str(player_id)] = Player.model_validate(data)
-        except Exception:
-            continue
+        except ValidationError:
+            skipped += 1
+    if payload and not players:
+        raise SleeperError("Sleeper players payload could not be parsed.")
+    if payload and skipped * 2 >= len(payload):
+        raise SleeperError(f"Sleeper players payload looks corrupt ({skipped} unreadable entries).")
     return players
 
 

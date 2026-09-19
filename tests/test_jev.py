@@ -1,5 +1,19 @@
+from types import SimpleNamespace
+
+import pytest
+import typesafe_sdk
+from typesafe_sdk import TypeSafeAPIConnectionError
+
+from jev_ff.errors import JevError
 from jev_ff.jev.advisor import JevAdvisor
-from jev_ff.jev.client import ChoiceAnswer, JevResult, NoulAnswer, ScoreAnswer
+from jev_ff.jev.client import (
+    ChoiceAnswer,
+    JevResult,
+    NoulAnswer,
+    ScoreAnswer,
+    TypeSafeJevEvaluator,
+    result_from_sdk,
+)
 from jev_ff.lineup.optimizer import PlayerValue, optimize_lineup
 from tests.factories import ScriptedJev, make_player_value
 
@@ -69,3 +83,50 @@ def test_start_sit_choice_promotes_the_backup() -> None:
     rerun = optimize_lineup(["RB"], adjusted)
     assert rerun.assignments[0][1].player.player_id == "b"
     assert any("prefers" in note.lower() for note in notes)
+
+
+def test_low_confidence_start_sit_flags_review_on_adjusted_starter() -> None:
+    starter = make_player_value("a", "Starter Back", "RB", 14)
+    sitter = make_player_value("b", "Sitter Back", "RB", 13)
+    result = JevResult(
+        choices={"start_0_RB": ChoiceAnswer(choice="b", confidence=0.1, probabilities={"a": 0.4, "b": 0.6})},
+    )
+    adjusted, notes = _overlay([starter, sitter], ["RB"], result)
+    values_by_id = {value.player_id: value for value in adjusted}
+    assert values_by_id["a"].needs_review
+    assert values_by_id["a"].points == 14
+    assert starter.needs_review is False
+    assert any("review" in note.lower() for note in notes)
+
+
+def test_sdk_zero_confidence_is_preserved() -> None:
+    response = SimpleNamespace(
+        model="jev",
+        nouls={},
+        choices={"start": SimpleNamespace(choice="a", probabilities={}, confidence=0.0)},
+        scores={"faab": SimpleNamespace(score=2.0, confidence=0.0, legend={})},
+        answers={},
+    )
+    result = result_from_sdk(response)
+    assert result.choices["start"].confidence == 0.0
+    assert result.scores["faab"].confidence == 0.0
+
+
+def test_typesafe_connection_error_is_jev_error(monkeypatch) -> None:
+    class FakeClient:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def system_one(self, **kwargs: object):
+            raise TypeSafeAPIConnectionError("offline")
+
+    monkeypatch.setattr(typesafe_sdk, "TypeSafeClient", FakeClient)
+    evaluator = TypeSafeJevEvaluator(api_key="test-key", model="jev-latest")
+    with pytest.raises(JevError, match="TypeSafe request failed"):
+        evaluator.system_one({}, {"inactive": {"type": "noul", "instructions": "Is this player inactive?"}})

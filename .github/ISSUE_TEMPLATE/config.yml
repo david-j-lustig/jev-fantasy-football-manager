@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: TypeSafe docs
+    url: https://docs.typesafe.ai/api
+    about: TypeSafe Jev API docs
+  - name: Sleeper API docs
+    url: https://docs.sleeper.com/
+    about: Official Sleeper HTTP API

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from jev_ff.jev.advisor import JevAdvisor
 from jev_ff.jev.client import JevResult
-from jev_ff.lineup.slots import player_can_fill, starter_slots
+from jev_ff.lineup.slots import player_can_fill, slot_sort_key, starter_slots
 from jev_ff.sleeper.models import Player, Roster
 from jev_ff.sleeper.schedule import is_on_bye, is_out
 from jev_ff.waivers.models import WaiverAdd, WaiverReport
@@ -170,23 +170,42 @@ def _replacement_levels(
     ros_points: dict[str, float],
     bye_teams: set[str],
 ) -> dict[str, tuple[float, float]]:
+    assigned = _assigned_starters(my_players, slots, week_points, bye_teams)
     levels: dict[str, tuple[float, float]] = {}
     for slot in dict.fromkeys(slots):
-        eligible = [
-            player
-            for player in my_players
-            if player_can_fill(player, slot) and not is_on_bye(player, bye_teams, None) and not is_out(player)
-        ]
-        if not eligible:
+        occupants = assigned.get(slot) or []
+        if not occupants:
             levels[slot] = (0.0, 0.0)
             continue
-        eligible.sort(key=lambda player: week_points.get(player.player_id, 0.0), reverse=True)
-        worst = eligible[: max(slots.count(slot), 1)][-1]
+        worst = min(occupants, key=lambda player: week_points.get(player.player_id, 0.0))
         levels[slot] = (
             week_points.get(worst.player_id, 0.0),
             ros_points.get(worst.player_id, 0.0),
         )
     return levels
+
+
+def _assigned_starters(
+    my_players: list[Player],
+    slots: list[str],
+    week_points: dict[str, float],
+    bye_teams: set[str],
+) -> dict[str, list[Player]]:
+    """Greedy starters in slot-priority order so FLEX replacement is the leftover, not WR1/RB1."""
+    available = [player for player in my_players if not is_on_bye(player, bye_teams, None) and not is_out(player)]
+    available.sort(key=lambda player: week_points.get(player.player_id, 0.0), reverse=True)
+    used_ids: set[str] = set()
+    assigned: dict[str, list[Player]] = {slot: [] for slot in dict.fromkeys(slots)}
+    for _, slot in sorted(enumerate(slots), key=slot_sort_key):
+        pick = next(
+            (player for player in available if player.player_id not in used_ids and player_can_fill(player, slot)),
+            None,
+        )
+        if pick is None:
+            continue
+        used_ids.add(pick.player_id)
+        assigned[slot].append(pick)
+    return assigned
 
 
 def _value_over_replacement(

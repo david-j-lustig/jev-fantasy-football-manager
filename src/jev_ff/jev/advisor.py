@@ -178,7 +178,9 @@ def _apply_start_sit_answers(
         if not choice or choice.choice == "other":
             continue
         if not _is_confident(choice.confidence):
-            call.starter.needs_review = True
+            starter = adjusted.get(call.starter.player_id)
+            if starter is not None:
+                starter.needs_review = True
             notes.append(f"{call.slot}: start/sit needs review (low Jev confidence).")
             continue
         chosen = adjusted.get(choice.choice)

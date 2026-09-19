@@ -33,7 +33,7 @@ _ALIASES = {
     "kyren": "kyren williams",
     "bijan": "bijan robinson",
     "breece": "breece hall",
-    "achane": "devaughn achane",
+    "achane": "de'von achane",
     "ken walker": "kenneth walker",
     "dk": "dk metcalf",
     "aem": "amon-ra st. brown",

@@ -15,3 +15,7 @@ class ConfigError(JevFFError):
 
 class PlayerLookupError(JevFFError):
     """Could not resolve a player name or id."""
+
+
+class JevError(JevFFError):
+    """TypeSafe / Jev request failed."""

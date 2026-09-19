@@ -15,7 +15,7 @@ from jev_ff.errors import JevFFError
 from jev_ff.manager import FantasyManager
 from jev_ff.models import LineupReport, TradeReport, WaiverReport
 
-app = typer.Typer(no_args_is_help=True, add_completion=False, help="Sleeper recommendations powered by Jev.")
+app = typer.Typer(no_args_is_help=True, add_completion=False, help="Recommend Sleeper lineups, waivers, and trades.")
 console = Console()
 T = TypeVar("T")
 
@@ -51,6 +51,21 @@ def _run(action: Callable[[], T]) -> T:
         raise typer.Exit(1) from exc
 
 
+def _run_with_manager(
+    league_id: str | None,
+    roster_id: int | None,
+    username: str | None,
+    config: Path | None,
+    model: str | None,
+    action: Callable[[FantasyManager], T],
+) -> T:
+    manager = _run(lambda: _build_manager(league_id, roster_id, username, config, model))
+    try:
+        return _run(lambda: action(manager))
+    finally:
+        manager.close()
+
+
 @app.callback()
 def _root() -> None:
     """Recommend lineups, waivers, and trades for a Sleeper league."""
@@ -66,8 +81,9 @@ def lineup(
     model: str | None = typer.Option(None, "--model", help="TypeSafe model id (default jev-latest)"),
 ) -> None:
     """Recommend a starting lineup for the week."""
-    manager = _run(lambda: _build_manager(league_id, roster_id, username, config, model))
-    report = _run(lambda: manager.recommend_lineup(week))
+    report = _run_with_manager(
+        league_id, roster_id, username, config, model, lambda manager: manager.recommend_lineup(week)
+    )
     _print_lineup(report)
 
 
@@ -82,8 +98,14 @@ def waivers(
     model: str | None = typer.Option(None, "--model"),
 ) -> None:
     """Rank waiver-wire adds for your roster."""
-    manager = _run(lambda: _build_manager(league_id, roster_id, username, config, model))
-    report = _run(lambda: manager.find_waivers(week, limit=limit))
+    report = _run_with_manager(
+        league_id,
+        roster_id,
+        username,
+        config,
+        model,
+        lambda manager: manager.find_waivers(week, limit=limit),
+    )
     _print_waivers(report)
 
 
@@ -100,8 +122,14 @@ def trade(
     model: str | None = typer.Option(None, "--model"),
 ) -> None:
     """Evaluate a proposed give/get trade."""
-    manager = _run(lambda: _build_manager(league_id, roster_id, username, config, model))
-    report = _run(lambda: manager.evaluate_trade(give, get, week=week, opponent_roster_id=opponent_roster_id))
+    report = _run_with_manager(
+        league_id,
+        roster_id,
+        username,
+        config,
+        model,
+        lambda manager: manager.evaluate_trade(give, get, week=week, opponent_roster_id=opponent_roster_id),
+    )
     _print_trade(report)
 
 

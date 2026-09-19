@@ -1,4 +1,7 @@
+import pytest
+
 from jev_ff.context import LeagueContext
+from jev_ff.errors import ConfigError, SleeperError
 from jev_ff.jev.client import NullJevEvaluator
 from jev_ff.lineup.optimizer import build_player_values, optimize_lineup
 from jev_ff.manager import FantasyManager
@@ -97,8 +100,43 @@ def test_recommend_lineup_uses_league_scoring() -> None:
         },
     )
     manager = FantasyManager("L1", roster_id=1, jev=NullJevEvaluator())
-    report = manager.recommend_lineup(context=context)
+    try:
+        report = manager.recommend_lineup(context=context)
+    finally:
+        manager.close()
     names = [row.player.full_name for row in report.starters if row.player]
     assert "R Three" in names
     assert report.projected_total >= report.current_total
     assert report.week == 3
+
+
+def test_unknown_roster_id_is_config_error() -> None:
+    context = LeagueContext(
+        league=sample_league(),
+        rosters=[sample_roster(1, players=["qb"])],
+        users=[sample_user()],
+        players={"qb": make_player("qb", "Q Star", "QB")},
+        week=1,
+        season="2025",
+        season_type="regular",
+    )
+    manager = FantasyManager("L1", roster_id=99, jev=NullJevEvaluator())
+    try:
+        with pytest.raises(ConfigError, match="Roster 99"):
+            manager.recommend_lineup(context=context)
+    finally:
+        manager.close()
+
+
+def test_missing_rostered_player_raises() -> None:
+    context = LeagueContext(
+        league=sample_league(),
+        rosters=[sample_roster(1, players=["qb", "ghost"])],
+        users=[sample_user()],
+        players={"qb": make_player("qb", "Q Star", "QB")},
+        week=1,
+        season="2025",
+        season_type="regular",
+    )
+    with pytest.raises(SleeperError, match="missing from the Sleeper player map"):
+        context.roster_players(context.roster(1))

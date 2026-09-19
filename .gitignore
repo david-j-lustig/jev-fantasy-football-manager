@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local JEV FF config and caches
+jev-ff.toml
+.jev_ff_cache/

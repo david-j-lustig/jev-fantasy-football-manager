@@ -1,0 +1,8 @@
+# Copy to jev-ff.toml in the working directory, or to ~/.config/jev-ff/config.toml
+#
+# TYPESAFE_API_KEY is environment-only. A key in this file is rejected.
+
+league_id = "your-sleeper-league-id"
+roster_id = 1
+# username = "your-sleeper-username"
+model = "jev-latest"

@@ -1,0 +1,36 @@
+name: Bug report
+description: Something is wrong with recommendations or the Sleeper / Jev integration
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include API keys.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw vs what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: league
+    attributes:
+      label: League setup
+      description: Scoring (PPR / half / TE premium), Superflex, IDP, roster slots, week.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or snippet
+      render: bash
+      placeholder: jev-ff lineup --league-id … --username …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`pip show jev-fantasy-football-manager` or a git SHA."
+    validations:
+      required: true

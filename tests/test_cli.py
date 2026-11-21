@@ -47,3 +47,15 @@ def test_toml_api_key_is_rejected(tmp_path, monkeypatch) -> None:
     path.write_text('league_id = "L1"\ntypesafe_api_key = "secret"\n')
     with pytest.raises(ConfigError, match="TYPESAFE_API_KEY"):
         load_settings(config_path=path)
+
+
+def test_toml_openai_api_key_is_rejected(tmp_path) -> None:
+    path = tmp_path / "jev-ff.toml"
+    path.write_text('league_id = "L1"\nopenai_api_key = "secret"\n')
+    with pytest.raises(ConfigError, match="OPENAI_API_KEY"):
+        load_settings(config_path=path)
+
+
+def test_openai_api_key_from_env(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    assert load_settings(league_id="L1").openai_api_key == "sk-test"

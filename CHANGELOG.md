@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0 - 2026-11-20
+
+- Optional OpenAI Decisions backend: `--model gpt-6-luna` with `OPENAI_API_KEY`. Install with `pip install 'jev-fantasy-football-manager[openai]'`. Jev stays the default.
+
 ## 0.1.0 - 2026-09-18
 
 - Python library and `jev-ff` CLI for Sleeper lineup, waiver, and trade recommendations.

@@ -9,6 +9,7 @@ from jev_ff.context import LeagueContext
 from jev_ff.errors import ConfigError, SleeperError
 from jev_ff.jev.advisor import JevAdvisor
 from jev_ff.jev.client import JevEvaluator, NullJevEvaluator, TypeSafeJevEvaluator
+from jev_ff.jev.openai_decisions import OpenAIDecisionsEvaluator, is_luna_model
 from jev_ff.lineup.optimizer import (
     LineupSolution,
     PlayerValue,
@@ -47,6 +48,7 @@ class FantasyManager:
         news: NewsProvider | None = None,
         jev: JevEvaluator | None = None,
         typesafe_api_key: str | None = None,
+        openai_api_key: str | None = None,
         model: str = "jev-latest",
         cache: JsonFileCache | None = None,
     ) -> None:
@@ -57,7 +59,7 @@ class FantasyManager:
         self.sleeper = sleeper or SleeperClient(cache=cache)
         self.projections = projections or SleeperProjectionsProvider(self.sleeper)
         self.news = news or InjuryNewsProvider()
-        self.jev = _build_jev_evaluator(jev, typesafe_api_key, model)
+        self.jev = _build_jev_evaluator(jev, typesafe_api_key, openai_api_key, model)
         self.advisor = JevAdvisor(self.jev, enabled=not isinstance(self.jev, NullJevEvaluator))
         self.model = model
         self._resolved_roster_id: int | None = None
@@ -80,6 +82,7 @@ class FantasyManager:
         username: str | None = None,
         *,
         typesafe_api_key: str | None = None,
+        openai_api_key: str | None = None,
         model: str | None = None,
     ) -> FantasyManager:
         settings = load_settings(
@@ -87,6 +90,7 @@ class FantasyManager:
             roster_id=roster_id,
             username=username,
             typesafe_api_key=typesafe_api_key,
+            openai_api_key=openai_api_key,
             model=model,
         )
         return cls.from_settings(settings)
@@ -98,6 +102,7 @@ class FantasyManager:
             roster_id=settings.roster_id,
             username=settings.username,
             typesafe_api_key=settings.typesafe_api_key,
+            openai_api_key=settings.openai_api_key,
             model=settings.model,
             **kwargs,  # type: ignore[arg-type]
         )
@@ -293,10 +298,15 @@ class FantasyManager:
 def _build_jev_evaluator(
     jev: JevEvaluator | None,
     typesafe_api_key: str | None,
+    openai_api_key: str | None,
     model: str,
 ) -> JevEvaluator:
     if jev is not None:
         return jev
+    if is_luna_model(model):
+        if not openai_api_key:
+            raise ConfigError(f"model {model} needs OPENAI_API_KEY.")
+        return OpenAIDecisionsEvaluator(api_key=openai_api_key, model=model)
     if typesafe_api_key:
         return TypeSafeJevEvaluator(api_key=typesafe_api_key, model=model)
     return NullJevEvaluator()

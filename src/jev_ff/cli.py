@@ -37,7 +37,8 @@ def _build_manager(
     manager = FantasyManager.from_settings(settings)
     if not manager.jev_enabled:
         console.print(
-            "[yellow]Jev disabled[/yellow] — set TYPESAFE_API_KEY for news/injury overlays. "
+            "[yellow]Decision Model disabled[/yellow] — set TYPESAFE_API_KEY "
+            "(or OPENAI_API_KEY with --model gpt-6-luna) for news/injury overlays. "
             "Projection-only recommendations still run."
         )
     return manager
@@ -78,7 +79,7 @@ def lineup(
     username: str | None = typer.Option(None, "--username", help="Sleeper username (if no roster id)"),
     week: int | None = typer.Option(None, "--week", help="NFL week (default: current)"),
     config: Path | None = typer.Option(None, "--config", help="Path to jev-ff.toml"),
-    model: str | None = typer.Option(None, "--model", help="TypeSafe model id (default jev-latest)"),
+    model: str | None = typer.Option(None, "--model", help="jev-latest (default) or gpt-6-luna"),
 ) -> None:
     """Recommend a starting lineup for the week."""
     report = _run_with_manager(
@@ -134,7 +135,7 @@ def trade(
 
 
 def _print_lineup(report: LineupReport) -> None:
-    jev_tag = "  [cyan]Jev on[/cyan]" if report.jev_enabled else ""
+    jev_tag = "  [cyan]Decision Model on[/cyan]" if report.jev_enabled else ""
     console.print(
         f"[bold]Week {report.week} lineup[/bold]  projected {report.projected_total:.1f}  "
         f"current {report.current_total:.1f}  delta {report.delta:+.1f}{jev_tag}"

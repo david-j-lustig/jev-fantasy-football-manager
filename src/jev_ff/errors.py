@@ -18,4 +18,4 @@ class PlayerLookupError(JevFFError):
 
 
 class JevError(JevFFError):
-    """TypeSafe / Jev request failed."""
+    """TypeSafe Jev or OpenAI Decisions request failed."""

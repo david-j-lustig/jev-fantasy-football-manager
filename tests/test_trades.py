@@ -45,5 +45,5 @@ def test_jev_fairness_can_override_points() -> None:
         advisor=JevAdvisor(ScriptedJev(result), enabled=True),
     )
     assert report.jev_enabled
-    assert report.recommendation == "Jev: decline."
+    assert report.recommendation == "Decision Model: decline."
     assert report.fairness_label == "Slight loss"

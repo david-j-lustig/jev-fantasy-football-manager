@@ -51,7 +51,19 @@ roster_id = 1
 model = "jev-latest"
 ```
 
-CLI flags override env, which overrides toml. Put `TYPESAFE_API_KEY` in the environment only — a key in toml is rejected. Sleeper’s official API needs no token.
+CLI flags override env, which overrides toml. Put API keys in the environment only — a key in toml is rejected. Sleeper’s official API needs no token.
+
+### OpenAI Decisions (GPT Luna)
+
+Jev is the default. To ask the same questions through OpenAI’s Decisions API instead:
+
+```bash
+pip install 'jev-fantasy-football-manager[openai]'
+export OPENAI_API_KEY=...
+jev-ff lineup --model gpt-6-luna
+```
+
+Confidence thresholds were tuned on Jev, so expect Luna’s review flags to fire a little differently.
 
 The NFL player map is cached for 24 hours (`JEV_FF_CACHE_DIR` overrides the path). Don’t hammer `GET /v1/players/nfl`.
 
@@ -63,7 +75,7 @@ sum(stat[k] * league.scoring_settings[k])
 
 Sleeper’s pre-baked `pts_ppr` / `pts_std` fields are ignored, so half-PPR, TE premium, 6-point passing TDs, and IDP score correctly. Weekly and rest-of-season lines come from community projections on `api.sleeper.com`. You can supply your own `ProjectionsProvider` or `NewsProvider`.
 
-Jev is optional. When a key is set, Python still owns lineup math; Jev only answers injury, start/sit, FAAB, and fairness questions.
+The decision model (Jev by default, or GPT Luna) is optional. When a key is set, Python still owns lineup math; the decision model only answers injury, start/sit, FAAB, and fairness questions.
 
 ## Contributing
 

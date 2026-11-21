@@ -133,18 +133,18 @@ def _apply_jev_fairness(report: TradeReport, result: JevResult) -> None:
         index = min(4, max(0, int(round(fairness.score))))
         report.fairness_score = fairness.score
         report.fairness_label = FAIRNESS_LABELS[index]
-        report.notes.append(f"Jev fairness: {report.fairness_label} ({fairness.score:.2f}).")
+        report.notes.append(f"Decision Model fairness: {report.fairness_label} ({fairness.score:.2f}).")
     accept = result.nouls.get("should_accept")
     opponent = result.nouls.get("opponent_accept")
     if accept:
         report.should_accept = accept.noul
         if accept.noul >= 0.6:
-            report.recommendation = "Jev: accept."
+            report.recommendation = "Decision Model: accept."
         elif accept.noul <= 0.4:
-            report.recommendation = "Jev: decline."
+            report.recommendation = "Decision Model: decline."
     if opponent:
         report.opponent_would_accept = opponent.noul
         if opponent.noul < 0.35:
-            report.notes.append("Jev thinks the other manager is unlikely to accept.")
+            report.notes.append("Decision Model thinks the other manager is unlikely to accept.")
         elif opponent.noul > 0.65:
-            report.notes.append("Jev thinks a typical opponent would accept.")
+            report.notes.append("Decision Model thinks a typical opponent would accept.")

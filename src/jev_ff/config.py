@@ -21,6 +21,7 @@ class Settings:
     roster_id: int | None = None
     username: str | None = None
     typesafe_api_key: str | None = None
+    openai_api_key: str | None = None
     model: str = "jev-latest"
     week: int | None = None
 
@@ -52,6 +53,7 @@ def load_settings(
     roster_id: int | None = None,
     username: str | None = None,
     typesafe_api_key: str | None = None,
+    openai_api_key: str | None = None,
     model: str | None = None,
     week: int | None = None,
     config_path: Path | None = None,
@@ -83,17 +85,18 @@ def load_settings(
         or os.environ.get("JEV_FF_USERNAME")
         or _as_str(file_data.get("username"))
     )
-    if file_data.get("typesafe_api_key") is not None:
-        raise ConfigError(
-            "typesafe_api_key is not allowed in jev-ff.toml. Set TYPESAFE_API_KEY in the environment instead."
-        )
+    for key_name, env_name in (("typesafe_api_key", "TYPESAFE_API_KEY"), ("openai_api_key", "OPENAI_API_KEY")):
+        if file_data.get(key_name) is not None:
+            raise ConfigError(f"{key_name} is not allowed in jev-ff.toml. Set {env_name} in the environment instead.")
     resolved_key = typesafe_api_key or os.environ.get("TYPESAFE_API_KEY") or os.environ.get("JEV_API_KEY")
+    resolved_openai_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
     resolved_model = model or os.environ.get("JEV_FF_MODEL") or _as_str(file_data.get("model")) or "jev-latest"
     return Settings(
         league_id=resolved_league,
         roster_id=resolved_roster,
         username=resolved_username,
         typesafe_api_key=resolved_key,
+        openai_api_key=resolved_openai_key,
         model=resolved_model,
         week=week,
     )

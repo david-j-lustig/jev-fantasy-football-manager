@@ -29,7 +29,7 @@ Open an issue first if the change is large or would write to Sleeper. In the PR,
 - Scoring, slots, byes, and rankings stay in Python.
 - Jev questions should be narrow (`Noul` / `Choice` / `Score`) with compact state.
 - Recommend only — no unofficial Sleeper writes (set lineup, claims, trades).
-- API keys come from `TYPESAFE_API_KEY` only. Don’t put them in `jev-ff.toml`.
+- API keys come from `TYPESAFE_API_KEY` / `OPENAI_API_KEY` only. Don’t put them in `jev-ff.toml`.
 
 ## Bugs and security
 

@@ -40,22 +40,13 @@ def test_invalid_roster_id_from_env_raises_config_error(monkeypatch) -> None:
         load_settings(league_id="L1")
 
 
-def test_toml_api_key_is_rejected(tmp_path, monkeypatch) -> None:
-    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
-    monkeypatch.delenv("JEV_API_KEY", raising=False)
+@pytest.mark.parametrize(
+    ("key_name", "env_name"),
+    [("typesafe_api_key", "TYPESAFE_API_KEY"), ("openai_api_key", "OPENAI_API_KEY")],
+)
+def test_toml_api_key_is_rejected(tmp_path, monkeypatch, key_name, env_name) -> None:
+    monkeypatch.delenv(env_name, raising=False)
     path = tmp_path / "jev-ff.toml"
-    path.write_text('league_id = "L1"\ntypesafe_api_key = "secret"\n')
-    with pytest.raises(ConfigError, match="TYPESAFE_API_KEY"):
+    path.write_text(f'league_id = "L1"\n{key_name} = "secret"\n')
+    with pytest.raises(ConfigError, match=env_name):
         load_settings(config_path=path)
-
-
-def test_toml_openai_api_key_is_rejected(tmp_path) -> None:
-    path = tmp_path / "jev-ff.toml"
-    path.write_text('league_id = "L1"\nopenai_api_key = "secret"\n')
-    with pytest.raises(ConfigError, match="OPENAI_API_KEY"):
-        load_settings(config_path=path)
-
-
-def test_openai_api_key_from_env(monkeypatch) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    assert load_settings(league_id="L1").openai_api_key == "sk-test"

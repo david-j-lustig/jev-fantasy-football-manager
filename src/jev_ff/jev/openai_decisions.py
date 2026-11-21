@@ -28,18 +28,12 @@ class OpenAIDecisionsEvaluator:
         try:
             response = OpenAI(api_key=self.api_key).decisions.create(
                 model=self.model,
-                input=_to_openai_input(state),
+                input=[{"role": "user", "content": [{"type": "input_json", "data": state}]}],
                 questions=_to_openai_questions(questions),
             )
         except OpenAIError as exc:
             raise JevError(f"OpenAI Decisions request failed: {exc}") from exc
         return result_from_openai(response)
-
-
-def _to_openai_input(state: Any) -> Any:
-    if isinstance(state, str):
-        return state
-    return [{"role": "user", "content": [{"type": "input_json", "data": state}]}]
 
 
 def _to_openai_questions(questions: dict[str, Any]) -> list[dict[str, Any]]:

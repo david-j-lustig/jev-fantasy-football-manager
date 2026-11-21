@@ -39,6 +39,7 @@ openai = [
 dev = [
     "pytest>=8",
     "ruff>=0.6",
+    "openai>=3.37",
 ]
 
 [project.urls]

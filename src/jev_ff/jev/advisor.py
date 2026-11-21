@@ -150,8 +150,8 @@ def _apply_injury_answers(
         if inactive and inactive.noul >= INACTIVE_THRESHOLD and _is_confident(inactive.confidence):
             adjusted[player_id].points = 0.0
             adjusted[player_id].eligible = False
-            adjusted[player_id].reason = "Jev: likely inactive"
-            notes.append(f"{value.player.full_name}: Jev thinks inactive ({inactive.noul:.2f}).")
+            adjusted[player_id].reason = "Decision Model: likely inactive"
+            notes.append(f"{value.player.full_name}: Decision Model thinks inactive ({inactive.noul:.2f}).")
             continue
         if inactive and inactive.noul >= INACTIVE_THRESHOLD and not _is_confident(inactive.confidence):
             adjusted[player_id].needs_review = True
@@ -161,7 +161,7 @@ def _apply_injury_answers(
             factor = _discount_factor(discount.score)
             adjusted[player_id].points = round(adjusted[player_id].points * factor, 4)
             if factor < 1:
-                adjusted[player_id].reason = f"Jev discount x{factor:.2f}"
+                adjusted[player_id].reason = f"Decision Model discount x{factor:.2f}"
                 notes.append(f"{value.player.full_name}: projection discounted x{factor:.2f}.")
         elif discount and not _is_confident(discount.confidence):
             adjusted[player_id].needs_review = True
@@ -181,7 +181,7 @@ def _apply_start_sit_answers(
             starter = adjusted.get(call.starter.player_id)
             if starter is not None:
                 starter.needs_review = True
-            notes.append(f"{call.slot}: start/sit needs review (low Jev confidence).")
+            notes.append(f"{call.slot}: start/sit needs review (low Decision Model confidence).")
             continue
         chosen = adjusted.get(choice.choice)
         starter = adjusted.get(call.starter.player_id)
@@ -189,8 +189,10 @@ def _apply_start_sit_answers(
             continue
         if chosen.points <= starter.points:
             chosen.points = round(starter.points + 0.01, 4)
-            chosen.reason = f"Jev start/sit over {starter.player.full_name}"
-            notes.append(f"{call.slot}: Jev prefers {chosen.player.full_name} over {starter.player.full_name}.")
+            chosen.reason = f"Decision Model start/sit over {starter.player.full_name}"
+            notes.append(
+                f"{call.slot}: Decision Model prefers {chosen.player.full_name} over {starter.player.full_name}."
+            )
 
 
 def _waiver_request(

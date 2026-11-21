@@ -157,7 +157,7 @@ def _apply_jev_to_adds(
     choice = jev_result.choices.get("best_drop")
     if choice and choice.choice != "other" and choice.choice in players:
         suggested = players[choice.choice]
-        notes.append(f"Jev preferred drop: {suggested.full_name}")
+        notes.append(f"Decision Model preferred drop: {suggested.full_name}")
         for row in adds:
             row.drop = suggested
     adds.sort(key=lambda add: add.score, reverse=True)

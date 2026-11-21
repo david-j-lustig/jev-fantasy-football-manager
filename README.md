@@ -75,7 +75,7 @@ sum(stat[k] * league.scoring_settings[k])
 
 Sleeper’s pre-baked `pts_ppr` / `pts_std` fields are ignored, so half-PPR, TE premium, 6-point passing TDs, and IDP score correctly. Weekly and rest-of-season lines come from community projections on `api.sleeper.com`. You can supply your own `ProjectionsProvider` or `NewsProvider`.
 
-Jev is optional. When a key is set, Python still owns lineup math; Jev only answers injury, start/sit, FAAB, and fairness questions.
+The decision model (Jev by default, or GPT Luna) is optional. When a key is set, Python still owns lineup math; the decision model only answers injury, start/sit, FAAB, and fairness questions.
 
 ## Contributing
 
